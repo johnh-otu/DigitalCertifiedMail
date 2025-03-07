@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 
 namespace DigitalCertifiedMail
 {
+    using DigitalCertifiedMail.Tools;
+    using Microsoft.IdentityModel.Tokens;
     using System;
     using System.IO;
     using System.Net;
@@ -13,6 +15,7 @@ namespace DigitalCertifiedMail
     using System.Net.Sockets;
     using System.Security.Authentication;
     using System.Security.Cryptography.X509Certificates;
+    using System.Text.Json;
 
     class TCPSender
     {
@@ -23,114 +26,98 @@ namespace DigitalCertifiedMail
             this.certificate = certificate;
         }
 
-        public async Task SendMessage(string ipAddress, int port, string message)
-        {
-            var certificateCollection = new X509CertificateCollection { certificate };
-
-            using (var client = new TcpClient(ipAddress, port))
+        
+        public async Task SendMessage(string ipAddress, int port, byte[] message)
+        {   
+            try
             {
-                Console.WriteLine("SND: Connected to receiver: " + ipAddress + ":" + port);
-
-                using (var sslStream = new SslStream(client.GetStream(), false))
+                using (TcpClient client = new TcpClient(ipAddress, port))
+                using (SslStream sslStream = await SslTools.SetUpClientSslStream(ipAddress, client, certificate))
+                using (StreamReader reader = new StreamReader(sslStream, Encoding.UTF8))
+                using (StreamWriter writer = new StreamWriter(sslStream, Encoding.UTF8) { AutoFlush = true })
                 {
-                    try
+                    Console.WriteLine("SND: SSL/TLS authentication successful.");
+
+                    while (true)
                     {
-                        // Authenticate client with the server
-                        sslStream.AuthenticateAsClient(ipAddress, certificateCollection,
-                                                       SslProtocols.Tls12, checkCertificateRevocation: true);
-                        Console.WriteLine("SND: SSL/TLS authentication successful.");
+                        await writer.WriteLineAsync(JsonSerializer.Serialize(message));
+                        Console.WriteLine("SND: Message sent...");
 
-                        using (var writer = new StreamWriter(sslStream, Encoding.UTF8) { AutoFlush = true })
-                        using (var reader = new StreamReader(sslStream, Encoding.UTF8))
+                        string strRes = await reader.ReadLineAsync();
+
+                        try //GET ACK
                         {
-                            while (true)
+                            if (strRes.StartsWith("ACK"))
                             {
-                                // Write the message to the SSL stream
-                                await writer.WriteLineAsync(message);
-                                Console.WriteLine("SND: Message sent.");
-
-                                // Wait for ACK
-                                var ackTask = reader.ReadLineAsync();
-                                if (await Task.WhenAny(ackTask, Task.Delay(timeoutSeconds * 1000)) == ackTask)
-                                {
-                                    if (ackTask.Result == "ACK")
-                                    {
-                                        Console.WriteLine("SND: ACK received.");
-                                        return;
-                                    }
-                                    else
-                                    {
-                                        Console.WriteLine("SND: No valid ACK received, resending...");
-                                    }
-                                }
-                                else
-                                {
-                                    Console.WriteLine("Timed out....");
-                                }
+                                Console.WriteLine("SND: Message received by addressee.");
+                                return;
+                            }
+                            else
+                            {
+                                Console.WriteLine("SND: Message corrupted or not received. Resending...");
+                                continue;
                             }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"SND: Authentication failed: {ex.Message}");
+                        catch (Exception) //NO ACK -> errors on GetString
+                        {
+                            Console.WriteLine("SND: Message corrupted or not received. Resending...");
+                            continue;
+                        }
                     }
                 }
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"SND: Authentication failed: {ex.Message}");
+            }
         }
 
-        public async Task<string> RequestPublicKey(string ipAddress, int port)
+        public async Task<RsaSecurityKey> RequestPublicKey(string ipAddress, int port)
         {
             var certificateCollection = new X509CertificateCollection { certificate };
+            Exception latestException = new Exception();
 
-            using (var client = new TcpClient(ipAddress, port))
+            try
             {
-                Console.WriteLine("SND: Connected to receiver: " + ipAddress + ":" + port);
-
-                using (var sslStream = new SslStream(client.GetStream(), false))
+                using (TcpClient client = new TcpClient(ipAddress, port))
+                using (SslStream sslStream = await SslTools.SetUpClientSslStream(ipAddress, client, certificate))
+                using (StreamReader reader = new StreamReader(sslStream, Encoding.UTF8))
+                using (StreamWriter writer = new StreamWriter(sslStream, Encoding.UTF8) { AutoFlush = true })
                 {
-                    try
-                    {
-                        // Authenticate *NOT* client with the server
-                        //sslStream.AuthenticateAsClient(ipAddress, certificateCollection,
-                        //                               SslProtocols.Tls12, checkCertificateRevocation: true);
-                        sslStream.AuthenticateAsClient(ipAddress, null,
-                                                       SslProtocols.Tls12, checkCertificateRevocation: false);
-                        Console.WriteLine("SND: SSL/TLS authentication successful.");
+                    Console.WriteLine("SND: SSL/TLS authentication successful.");
 
-                        using (var writer = new StreamWriter(sslStream, Encoding.UTF8) { AutoFlush = true })
-                        using (var reader = new StreamReader(sslStream, Encoding.UTF8))
+                    for (int i = 0; i < 8; i++) //attempt 8 times
+                    {
+                        await writer.WriteLineAsync("REQPUBKEY");
+                        Console.WriteLine("SND: Public key request sent...");
+
+                        string response = await reader.ReadLineAsync();
+
+                        try //GET KEY VALUE
                         {
-                            while (true)
-                            {
-                                // Write the message to the SSL stream
-                                await writer.WriteLineAsync("PUBKEYREQ");
-                                Console.WriteLine("SND: Public key request sent.");
-
-                                // Wait for Key
-                                var keyTask = reader.ReadLineAsync();
-                                if (await Task.WhenAny(keyTask, Task.Delay(timeoutSeconds * 1000)) == keyTask)
-                                {
-                                    if (!(keyTask.Result is null) && keyTask.Result.StartsWith("PUBKEY:"))
-                                    {
-                                        Console.WriteLine($"SND: Received public key");
-                                        return keyTask.Result.Split(' ')[1];
-                                    }
-                                    else
-                                    {
-                                        Console.WriteLine("SND: No key received, resending...");
-                                    }
-                                }
-                            }
+                            var key = EncryptionTools.DeserializeRSAKey(response);
+                            Console.WriteLine("SND: Public key received!");
+                            return key;
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"SND: Authentication failed: {ex.Message}");
-                        throw ex;
+                        catch (Exception e) //KEY VALUE DID NOT SERIALIZE PROPERLY
+                        {
+                            latestException = e;
+                            Console.WriteLine("SND: Could not deserialize public key, requesting again...");
+                            continue;
+                        }
+
                     }
                 }
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"SND: Authentication failed: {ex.Message}");
+                throw;
+            }
+
+            //ran into deserialization errors too many times
+            throw latestException;
         }
+
     }
-
 }

@@ -18,7 +18,7 @@ namespace DigitalCertifiedMail
         private static string certificate_path;
         private static string certificate_password;
 
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             // Verify that args contains the required parameters
             if (args.Length < 4)
@@ -82,7 +82,7 @@ namespace DigitalCertifiedMail
 
                         try
                         {
-                            mediator.PublishMessage(messageContent, new TCPAddressee(addrIP, addrPort));
+                            await mediator.PublishMessage(messageContent, new TCPAddressee(addrIP, addrPort));
                             Console.WriteLine("Message sent.\n");
                         }
                         catch (Exception e)
@@ -112,7 +112,7 @@ namespace DigitalCertifiedMail
                     case "hello world":
                         try
                         {
-                            mediator.PublishMessage("hello world\n", new TCPAddressee(ip, port));
+                            await mediator.PublishMessage("hello world\n", new TCPAddressee(ip, port));
                             Console.WriteLine("Message sent.\n");
                         }
                         catch (Exception e)

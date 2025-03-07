@@ -142,7 +142,9 @@
     <Compile Include="Classes\DigitalSignature.cs" />
     <Compile Include="Classes\Builders\DigitalSignatureBuilder.cs" />
     <Compile Include="Tools\EncryptionTools.cs" />
+    <Compile Include="Tools\ExampleTest.cs" />
     <Compile Include="Tools\HashingTools.cs" />
+    <Compile Include="Tools\SslTools.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

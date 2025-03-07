@@ -28,11 +28,11 @@ namespace DigitalCertifiedMail
             this.ip = ip;
             this.port = port;
 
-            using (RSA rsa = RSA.Create())
-            {
-                public_key = new RsaSecurityKey(rsa.ExportParameters(false));
-                private_key = new RsaSecurityKey(rsa.ExportParameters(true));
-            }
+            RSA rsa = RSA.Create();
+            rsa.KeySize = EncryptionTools.RSA_KEY_SIZE;
+            public_key = new RsaSecurityKey(rsa.ExportParameters(false));
+            private_key = new RsaSecurityKey(rsa.ExportParameters(true));
+            
 
             dcmHandler = new DCMHandler(private_key);
             tcpHandler = new TCPHandler(ip, port, certificate_path, certificate_password, dcmHandler.checkMessageIntegrity, GetPublicKey, dcmHandler.validateMessageAndAddToQueue);
@@ -42,7 +42,7 @@ namespace DigitalCertifiedMail
         public int getPort() { return port; }
         public RsaSecurityKey GetPublicKey() {  return public_key; }
 
-        public async void PublishMessage(String message, TCPAddressee addressee)
+        public async Task PublishMessage(String message, TCPAddressee addressee)
         {
             DCMFactory factory = new DCMFactory(tcpHandler);
             Console.WriteLine("Placing message in envelope...");

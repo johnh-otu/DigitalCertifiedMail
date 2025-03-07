@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 namespace DigitalCertifiedMail
 {
+    using DigitalCertifiedMail.Tools;
     using System;
     using System.Collections.Concurrent;
     using System.IO;
@@ -44,41 +45,49 @@ namespace DigitalCertifiedMail
             listener.Start();
             Console.WriteLine("REC: Receiver is listening on " + ipAddress + ":" + port + "...");
 
-            while (true)
+            _ = Task.Run(async () =>
             {
-                // Get new client and handle
-                var client = await listener.AcceptTcpClientAsync();
-                _ = Task.Run(() => HandleIncomingConnection(client));
-            }
+                while (true)
+                {
+                    // Get new client and handle
+                    var client = await listener.AcceptTcpClientAsync();
+                    _ = Task.Run(() => HandleIncomingConnection(client));
+                }
+            });
         }
 
         private async Task HandleIncomingConnection(TcpClient client)
         {
             Console.WriteLine("REC: Client " + client.Client.ToString() + " connected.");
 
-            // Get client SSL stream
-            using (var sslStream = new SslStream(client.GetStream(), false, (sender, cert, chain, sslErrors) => true))
+            try
             {
-                try
+                using (SslStream sslStream = await SslTools.SetUpServerSslStream(client, certificate))
+                using (StreamReader reader = new StreamReader(sslStream, Encoding.UTF8))
+                using (StreamWriter writer = new StreamWriter(sslStream, Encoding.UTF8) { AutoFlush = true })
                 {
-                    //Authenticate Server AND *NOT* Client with X.509 certificates
-                    sslStream.AuthenticateAsServer(certificate, clientCertificateRequired: false,
-                                                    enabledSslProtocols: SslProtocols.Tls12,
-                                                    checkCertificateRevocation: false);
-
+                    // Clear any residual data from the stream
                     Console.WriteLine("REC: SSL/TLS authentication successful.");
+                    await Task.Delay(1000);
 
-                    using (var reader = new StreamReader(sslStream, Encoding.UTF8))
-                    using (var writer = new StreamWriter(sslStream, Encoding.UTF8) { AutoFlush = true })
+                    while (true)
                     {
-                        while (true)
+                        //wait for message
+                        string receivedMessage = await reader.ReadLineAsync();
+                        if (string.IsNullOrEmpty(receivedMessage)) break;
+
+                        Console.WriteLine($"REC: Received message: {receivedMessage}");
+
+
+                        if (receivedMessage.Equals("REQPUBKEY"))
                         {
-                            //wait for message
-                            string receivedMessage = await reader.ReadLineAsync();
-                            if (string.IsNullOrEmpty(receivedMessage)) break;
-
-                            Console.WriteLine($"REC: Received message: {receivedMessage}");
-
+                            Console.WriteLine($"REC: Processing public key request...");
+                            var response = publicKeyFunction.Invoke();
+                            await writer.WriteLineAsync(response);
+                            break;
+                        }
+                        else
+                        {
                             //check integrity
                             if (integrityFunction(receivedMessage))
                             {
@@ -87,49 +96,30 @@ namespace DigitalCertifiedMail
                             }
                             else
                             {
-                                Console.WriteLine("REC: Invalid integrity hash. Ignoring...");
+                                Console.WriteLine("REC: Invalid integrity hash. Sending INV...");
+                                await writer.WriteLineAsync("INV");
                                 continue;
                             }
 
-                            if (receivedMessage.Equals("PUBKEYREQ"))
-                            {
-                                Console.WriteLine($"REC: Processing public key request...");
-                                var response = "PUBKEY: " + publicKeyFunction.Invoke();
-                                await writer.WriteLineAsync(response);
-                            }
-                            else
-                            {
-                                // Retrieve the client's IP address and port
-                                var clientEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
-                                string clientIpAddress = clientEndPoint?.Address.ToString();
-                                int clientPort = clientEndPoint?.Port ?? 0;
+                            // Retrieve the client's IP address and port
+                            var clientEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
+                            string clientIpAddress = clientEndPoint?.Address.ToString();
+                            //int clientPort = clientEndPoint?.Port ?? 0;
+                            int clientPort = 4200; //TODO: FIX TO MAKE ADAPTIVE TO ANY PORT
 
-                                //Handle Message
-                                receiveMessageFunction(receivedMessage, new TCPAddressee(clientIpAddress, clientPort));
-                            }
+                            //Handle Message
+                            receiveMessageFunction(receivedMessage, new TCPAddressee(clientIpAddress, clientPort));
+                            break;
                         }
-                        
                     }
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"REC: Authentication failed: {ex.Message}");
-                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"REC: Authentication failed: {ex.Message}");
             }
 
             client.Close();
         }
-
-        //private static bool ValidateClientCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
-        //{
-        //    if (sslPolicyErrors == SslPolicyErrors.None)
-        //    {
-        //        Console.WriteLine("REC: Client certificate validated successfully.");
-        //        return true;
-        //    }
-
-        //    Console.WriteLine($"REC: Client certificate validation failed: {sslPolicyErrors}");
-        //    return false;
-        //}
     }
 }

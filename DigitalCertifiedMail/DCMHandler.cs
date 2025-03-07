@@ -36,7 +36,7 @@ namespace DigitalCertifiedMail
             var envelope = new ReadOnlySpan<byte>(envelopeBytes);
 
             //split envelope
-            var temp = ByteTools.SplitBack(envelope, HashingTools.HASH_SIZE/8);
+            var temp = ByteTools.SplitBack(envelope, HashingTools.HASH_SIZE); //TODO: ERROR
             ReadOnlySpan<byte> message = new ReadOnlySpan<byte>(temp.a);
             ReadOnlySpan<byte> provided_hash = new ReadOnlySpan<byte>(temp.b);
 
@@ -55,7 +55,7 @@ namespace DigitalCertifiedMail
             envelope = envelope.SplitBack(HashingTools.HASH_SIZE).a;
 
             //split envelope (get encrypted message and encrypted symmetric key/iv)
-            int encryptedKeyIVComboSizeInBytes = (EncryptionTools.AES_KEY_SIZE + EncryptionTools.AES_IV_SIZE) / 8;
+            int encryptedKeyIVComboSizeInBytes = (EncryptionTools.RSA_KEY_SIZE / 8);
 
             var temp = envelope.SplitBack(encryptedKeyIVComboSizeInBytes);
 

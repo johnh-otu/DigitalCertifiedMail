@@ -37,7 +37,7 @@ namespace DigitalCertifiedMail.Classes.Builders
         public async Task<DCMObject> MakeEnvelope(string message, TCPAddressee addressee)
         {
             //GetPublicKey
-            Task<RsaSecurityKey> publicKeyTask = _tcpHandler.RequestPublicKey(addressee.GetIP(), addressee.GetPort());
+            //Task<RsaSecurityKey> publicKeyTask = _tcpHandler.RequestPublicKey(addressee.GetIP(), addressee.GetPort());
 
             //Timestamped Message
             DCMTimestampedMessage timestampedMessage = new DCMTimestampedMessage(message, _tcpHandler.GetCertificate());
@@ -62,14 +62,15 @@ namespace DigitalCertifiedMail.Classes.Builders
             //Encrypt KeyandIV
             byte[] keyIVCombo = Tools.ByteTools.Concat(symmetricalKey, symmetricalIV).ToArray();
 
-            RsaSecurityKey publicKey = await publicKeyTask;
+            RsaSecurityKey publicKey = await _tcpHandler.RequestPublicKey(addressee.GetIP(), addressee.GetPort());
             byte[] encryptedSymmKey = Tools.EncryptionTools.RSAEncrypt(keyIVCombo, publicKey).ToArray();
 
             //Digital Envelope
             DCMObject digitalEnvelope = new DCMObject(Tools.ByteTools.Concat(dcmMessage.GetBytes(), encryptedSymmKey));
 
             //Add Hash
-            digitalEnvelope.Concat(Tools.HashingTools.SHA256Hash(digitalEnvelope.GetBytes()));
+            byte[] hash = Tools.HashingTools.SHA256Hash(digitalEnvelope.GetBytes()).ToArray();
+            digitalEnvelope.Concat(hash);
 
             return digitalEnvelope;
         }
