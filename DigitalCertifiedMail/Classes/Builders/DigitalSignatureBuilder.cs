@@ -7,6 +7,7 @@ using System.IdentityModel.Tokens;
 using Microsoft.IdentityModel.Tokens;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
+using System.Net.Configuration;
 
 namespace DigitalCertifiedMail.Tools
 {
@@ -23,11 +24,16 @@ namespace DigitalCertifiedMail.Tools
 
         public DigitalSignature Build()
         {
-            //get hash
-            message.SetBytes(Tools.HashingTools.SHA256Hash(message.GetBytes()));
+            using (RSA rsa = RSA.Create())
+            {
+                // Load the private key
+                rsa.ImportParameters(private_key.Parameters);
 
-            //encrypt
-            return new DigitalSignature(Tools.EncryptionTools.RSAEncrypt(message.GetBytes(), private_key));
+                // Sign the data using SHA256 for hashing
+                byte[] signatureBytes = rsa.SignData(message.GetBytes().ToArray(), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+
+                return new DigitalSignature(signatureBytes);
+            }
         }
     }
 }

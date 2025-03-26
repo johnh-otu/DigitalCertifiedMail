@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -14,10 +15,14 @@ namespace DigitalCertifiedMail.Tools
 
         public bool IsValid(RsaSecurityKey signerKey, ReadOnlySpan<byte> messageBytes)
         {
-            ReadOnlySpan<byte> signatureHash = EncryptionTools.RSADecrypt(GetBytes(), signerKey);
-            ReadOnlySpan<byte> messageHash = HashingTools.SHA256Hash(messageBytes);
+            using (RSA rsa = RSA.Create())
+            {
+                //load public key
+                rsa.ImportParameters(signerKey.Parameters);
 
-            return signatureHash.SequenceEqual(messageHash);
+                //verify
+                return rsa.VerifyData(messageBytes.ToArray(), this.GetBytes().ToArray(), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            }
         }
     }
 }
