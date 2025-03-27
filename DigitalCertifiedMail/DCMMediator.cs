@@ -44,12 +44,14 @@ namespace DigitalCertifiedMail
 
         public async Task PublishMessage(String message, TCPAddressee addressee)
         {
-            DCMFactory factory = new DCMFactory(tcpHandler);
+            DCMFactory factory = new DCMFactory(tcpHandler, private_key, public_key);
             Console.WriteLine("Placing message in envelope...");
             DCMObject digitalEnvelope = await factory.MakeEnvelope(message, addressee);
             Console.WriteLine($"Sending message to {addressee.GetIP()}:{addressee.GetPort()}...");
 
             //Transport to Receiver
+            byte[] bytes = digitalEnvelope.GetBytes().ToArray();
+            string envString = Encoding.UTF8.GetString(bytes);
             tcpHandler.SendMail(addressee.GetIP(), addressee.GetPort(), digitalEnvelope);
         }
 

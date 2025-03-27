@@ -19,6 +19,7 @@ namespace DigitalCertifiedMail.Tools
             {
                 //load public key
                 rsa.ImportParameters(signerKey.Parameters);
+                rsa.KeySize = Tools.EncryptionTools.RSA_KEY_SIZE;
 
                 //verify
                 return rsa.VerifyData(messageBytes.ToArray(), this.GetBytes().ToArray(), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);

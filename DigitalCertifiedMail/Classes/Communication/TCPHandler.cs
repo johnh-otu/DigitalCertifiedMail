@@ -62,7 +62,7 @@ namespace DigitalCertifiedMail.Classes.Communication
             };
             _messageHandlerFunction = (msg_str, sender) =>
             {
-                DCMObject envelope = new DCMObject(Encoding.UTF8.GetBytes(msg_str));
+                DCMObject envelope = new DCMObject(JsonSerializer.Deserialize<byte[]>(msg_str));
                 messageHandlerFunction.Invoke(envelope, this, sender);
             };
 

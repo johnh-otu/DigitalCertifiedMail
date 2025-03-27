@@ -28,6 +28,7 @@ namespace DigitalCertifiedMail.Tools
             {
                 // Load the private key
                 rsa.ImportParameters(private_key.Parameters);
+                rsa.KeySize = Tools.EncryptionTools.RSA_KEY_SIZE;
 
                 // Sign the data using SHA256 for hashing
                 byte[] signatureBytes = rsa.SignData(message.GetBytes().ToArray(), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);

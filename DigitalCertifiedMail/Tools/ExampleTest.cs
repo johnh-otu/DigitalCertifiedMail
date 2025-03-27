@@ -51,7 +51,7 @@ namespace DigitalCertifiedMail.Tools
         private async static Task PublishMessage(String message)
         {
             TCPAddressee addressee = new TCPAddressee("127.0.0.1", 4200);
-            DCMFactory factory = new DCMFactory(handler);
+            DCMFactory factory = new DCMFactory(handler, private_key, public_key);
             Console.WriteLine("Placing message in envelope...");
             envelope = await factory.MakeEnvelope(message, addressee);
             Console.WriteLine($"Sending message to {addressee.GetIP()}:{addressee.GetPort()}...");

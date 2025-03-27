@@ -102,7 +102,9 @@ namespace DigitalCertifiedMail
         {
             try
             {
-                return GetMessage(++_cursor);
+                var msg = GetMessage(++_cursor);
+                Console.WriteLine(msg.GetMessageContent());
+                return msg;
             }
             catch (Exception)
             {

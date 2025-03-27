@@ -9,6 +9,8 @@ using System.Text;
 using System.Threading.Tasks;
 using DigitalCertifiedMail.Classes.Communication;
 using System.Text.Json;
+using System.IO;
+using System.Runtime.Serialization.Formatters.Binary;
 
 namespace DigitalCertifiedMail.Classes.Builders
 {
@@ -19,16 +21,12 @@ namespace DigitalCertifiedMail.Classes.Builders
         private TCPHandler _tcpHandler;
         private Random _rand;
 
-        public DCMFactory(TCPHandler tcpHandler) 
+        public DCMFactory(TCPHandler tcpHandler, RsaSecurityKey privateKey, RsaSecurityKey publicKey) 
         {
             _tcpHandler = tcpHandler;
             _rand = new Random();
-
-            using (RSA rsa = RSA.Create())
-            {
-                _publicKey = new RsaSecurityKey(rsa.ExportParameters(false));
-                _privateKey = new RsaSecurityKey(rsa.ExportParameters(true));
-            }
+            _privateKey = privateKey;
+            _publicKey = publicKey;
         }
 
         public RsaSecurityKey PrivateKey { get => _privateKey; }
@@ -41,10 +39,14 @@ namespace DigitalCertifiedMail.Classes.Builders
 
             //Timestamped Message
             DCMTimestampedMessage timestampedMessage = new DCMTimestampedMessage(message, _tcpHandler.GetCertificate());
-            DCMObject dcmMessage = new DCMObject(
-                UTF8Encoding.UTF8.GetBytes(
-                    JsonSerializer.Serialize(timestampedMessage)));
+            DCMObject dcmMessage;
 
+            BinaryFormatter formatter = new BinaryFormatter();
+            using (MemoryStream ms = new MemoryStream())
+            {
+                formatter.Serialize(ms, timestampedMessage);
+                dcmMessage = new DCMObject(ms.ToArray());
+            }
 
             //Add Digital Signature
             DigitalSignature signature = new DigitalSignatureBuilder(dcmMessage, PrivateKey).Build();
